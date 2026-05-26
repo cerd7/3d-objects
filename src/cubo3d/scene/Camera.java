@@ -14,4 +14,8 @@ public class Camera {
         double scale = distance / (distance + v.z);
         return new Vector2(v.x * scale, v.y * scale);
     }
+
+    public double getDistance(){
+        return distance;
+    }
 }

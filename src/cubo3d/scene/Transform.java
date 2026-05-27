@@ -17,10 +17,4 @@ public final class Transform {
     public Vector3 apply(Vector3 src, Vector3 dst){
     return matrix.transform(src, dst);
     }
-
-    /* DEAD CODE */
-    
-    // public Vector3 apply(Vector3 v){
-    //     return v.rotateX(rotX).rotateY(rotY).rotateZ(rotZ);
-    // }
 }

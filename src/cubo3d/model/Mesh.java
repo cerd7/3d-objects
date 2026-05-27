@@ -8,16 +8,14 @@ public class Mesh {
 
     public final Vector3[] vertices;
     public final int[][] faces;
-    public final int[][] edges;
     public final Color[] faceColors;
     public final int maxFaceSize;
     public final int[] faceColorIndex;
     public final Color[][] shadeLut;
 
-    public Mesh(Vector3[] vertices, int[][] faces, int[][] edges, Color[] palette, int[] faceColorIndex){
+    public Mesh(Vector3[] vertices, int[][] faces, Color[] palette, int[] faceColorIndex){
         this.vertices = vertices;
         this.faces = faces;
-        this.edges = edges;
         this.faceColors = palette;
         this.faceColorIndex = faceColorIndex;
 
@@ -53,22 +51,4 @@ public class Mesh {
     private static int clamp(int v){
         return v < 0 ? 0 : (v > 255 ? 255 : v);
     }
-
-    /* DEAD CODE */
-    
-    // public final Vector3[] vertices;
-    // public final int[][] faces;
-    // public final int[][] edges;
-    // public final Color[] faceColors;
-
-    // public Mesh(Vector3[] vertices, 
-    //             int [][] faces, 
-    //             int[][] edges, 
-    //             Color[] faceColors
-    // ){
-    //     this.vertices = vertices;
-    //     this.faces = faces;
-    //     this.edges = edges;
-    //     this.faceColors = faceColors;
-    // }
 }

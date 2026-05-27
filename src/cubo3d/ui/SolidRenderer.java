@@ -18,6 +18,11 @@ public final class SolidRenderer implements Renderer{
     private final Vector3 lightDir = new Vector3(0.2, -1.0, -0.3).normalize();
     private final Vector3 viewDir = new Vector3(0, 0, 1);
 
+    private Vector3[] clipA = new Vector3[0];
+    private Vector3[] clipB = new Vector3[0];
+    private Vector3[] clipPool = new Vector3[0];
+    private int clipPoolIndex = 0;
+
     private int[] xBuf = new int[0];
     private int[] yBuf = new int[0];
 
@@ -27,6 +32,7 @@ public final class SolidRenderer implements Renderer{
             Transform t = e.getTransform();
 
             ensureBuffers(mesh);
+            ensureClipBuffers(mesh);
 
             EntityBuffers b = e.getBuffer();
             for(int i=0;i<mesh.vertices.length;i++){
@@ -34,12 +40,7 @@ public final class SolidRenderer implements Renderer{
             }
 
             double dist = camera.getDistance();
-            for(int i=0;i<b.world.length;i++){
-                Vector3 v = b.world[i];
-                double scale = dist / (dist + v.z);
-                b.projX[i] = cx + v.x * scale;
-                b.projY[i] = cy + v.y * scale;
-            }
+            double zNear = -dist + 1.0; 
 
             for(int f=0;f<mesh.faces.length;f++){
                 int[] face = mesh.faces[f];
@@ -48,7 +49,6 @@ public final class SolidRenderer implements Renderer{
                 b.faceDepth[f] = z / face.length;
                 b.faceOrder[f] = f;
             }
-
             sortFacesByDepth(b.faceOrder, b.faceDepth);
 
             for(int k=0;k< b.faceOrder.length;k++){
@@ -73,25 +73,86 @@ public final class SolidRenderer implements Renderer{
                 if(level >= Mesh.SHADE_LEVELS) level = Mesh.SHADE_LEVELS - 1;
 
                 for(int i=0;i<face.length;i++){
-                    int idx = face[i];
-                    xBuf[i] = (int) b.projX[idx];
-                    yBuf[i] = (int) b.projY[idx];
+                    clipA[i] = b.world[face[i]];
+                }
+
+                int clipped = clipPolygon(clipA, face.length, clipB, zNear);
+                if(clipped < 3) continue;
+
+                for(int i=0;i<clipped;i++){
+                    Vector3 v = clipB[i];
+                    double scale = dist / (dist + v.z);
+                    xBuf[i] = (int) (cx + v.x * scale);
+                    yBuf[i] = (int) (cy + v.y * scale);
                 }
 
                 int colorIndex = mesh.faceColorIndex[f];
                 g.setColor(mesh.shadeLut[colorIndex][level]);
-                g.fillPolygon(xBuf, yBuf, face.length);
+                g.fillPolygon(xBuf, yBuf, clipped);
                 g.setColor(Color.BLACK);
-                g.drawPolygon(xBuf, yBuf, face.length);
+                g.drawPolygon(xBuf, yBuf, clipped);
             }
         }
     }
 
     private void ensureBuffers(Mesh mesh){
-        if(xBuf.length < mesh.maxFaceSize){
-            xBuf = new int[mesh.maxFaceSize];
-            yBuf = new int[mesh.maxFaceSize];
+        int needed = mesh.maxFaceSize + 2;
+        if(xBuf.length < needed){
+            xBuf = new int[needed];
+            yBuf = new int[needed];
         }
+    }
+
+    private void ensureClipBuffers(Mesh mesh){
+        int needed = mesh.maxFaceSize + 2;
+        if(clipA.length < needed){
+            clipA = new Vector3[needed];
+            clipB = new Vector3[needed];
+            clipPool = new Vector3[needed];
+            for(int i=0;i<needed;i++){
+                clipPool[i] = new Vector3();
+            }
+        }
+    }
+
+    private static boolean inside(Vector3 v, double zNear){
+        return v.z > zNear;
+    }
+
+    private Vector3 intersectZPlane(Vector3 a, Vector3 b, double zNear, Vector3 out){
+        double t = (zNear - a.z) / (b.z - a.z);
+        out.x = a.x + (b.x - a.x) * t;
+        out.y = a.y + (b.y - a.y) * t;
+        out.z = zNear;
+        return out;
+    }
+
+    private int clipPolygon(Vector3[] in, int inCount, Vector3[] out, double zNear){
+        if(inCount == 0) return 0;
+
+        clipPoolIndex = 0;
+        Vector3 S = in[inCount - 1];
+        boolean S_in = inside(S, zNear);
+        int outCount = 0;
+
+        for(int i=0;i<inCount;i++){
+            Vector3 E = in[i];
+            boolean E_in = inside(E, zNear);
+
+            if(E_in){
+                if(!S_in){
+                    Vector3 p = clipPool[clipPoolIndex++];
+                    out[outCount++] = intersectZPlane(S, E, zNear, p);
+                }
+                out[outCount++] = E;
+            } else if(S_in){
+                Vector3 p = clipPool[clipPoolIndex++];
+                out[outCount++] = intersectZPlane(S, E, zNear, p);
+            }
+            S = E;
+            S_in = E_in;
+        }
+        return outCount;
     }
 
     private void sortFacesByDepth(int[] order, double[] depth){
@@ -106,35 +167,5 @@ public final class SolidRenderer implements Renderer{
             order[j + 1] = key;
         }
     }
-
-
-    /* DEAD CODE */
-
-    // @Override
-    // public void render(Graphics2D g, Scene scene, Camera camera, int cx, int cy) {
-    //     for(Entity e : scene.getEntities()){
-    //         Mesh mesh = e.getMesh();
-    //         Transform t = e.getTransform();
-
-    //         Vector2[] projected = new Vector2[mesh.vertices.length];
-    //         for(int i=0;i<mesh.vertices.length;i++){
-    //             Vector3 v = t.apply(mesh.vertices[i]);
-    //             Vector2 p = camera.project(v);
-    //             projected[i] = new Vector2(cx + p.x, cy + p.y);
-    //         }
-
-    //         for(int i=0;i<mesh.faces.length;i++){
-    //             int[] face = mesh.faces[i];
-    //             Polygon poly = new Polygon();
-    //             for(int idx : face){
-    //                 poly.addPoint((int) projected[idx].x, (int) projected[idx].y);
-    //             }
-    //             g.setColor(mesh.faceColors[i]);
-    //             g.fillPolygon(poly);
-    //             g.setColor(Color.BLACK);
-    //             g.drawPolygon(poly);
-    //         }
-    //     }
-    // }
 
 }

@@ -15,16 +15,17 @@ public class App{
         JFrame janela = new JFrame("Cubo 3D");
 
         Scene scene = new Scene();
-        scene.add(new Entity(Cube.create(200), new Transform()));
-
         Renderer renderer = new SolidRenderer();
         Camera camera =  new Camera(400);
-
         RenderPanel panel = new RenderPanel(scene, renderer, camera);
+        
+        scene.add(new Entity(Cube.create(200), new Transform()));
+        
         janela.add(panel);
-
         janela.setSize(800, 600);
         janela.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         janela.setVisible(true);
+
+        javax.swing.SwingUtilities.invokeLater(panel::requestFocusInWindow);
     }
 }

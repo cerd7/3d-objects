@@ -10,6 +10,7 @@ public final class Entity {
     public Entity(Mesh mesh, Transform transform) {
         this.mesh = mesh;
         this.transform = transform;
+        this.transform.updateMatrix();
         this.buffers = new EntityBuffers(mesh);
     }
 

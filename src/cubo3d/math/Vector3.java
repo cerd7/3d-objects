@@ -46,29 +46,4 @@ public final class Vector3 {
         }
         return this;
     }
-
-    /* DEAD CODE */
-    // public Vector3 rotateX(double a){
-    //     double cos = Math.cos(a);
-    //     double sin = Math.sin(a);
-    //     double y2 = y * cos - z * sin;
-    //     double z2 = y * sin + z * cos;
-    //     return new Vector3(x, y2, z2);
-    // }
-
-    // public Vector3 rotateY(double a){
-    //     double cos = Math.cos(a);
-    //     double sin = Math.sin(a);
-    //     double x2 = x * cos - z * sin;
-    //     double z2 = x * sin + z * cos;
-    //     return new Vector3(x2, y, z2);
-    // }
-
-    // public Vector3 rotateZ(double a){
-    //     double cos = Math.cos(a);
-    //     double sin = Math.sin(a);
-    //     double x2 = x * cos - y * sin;
-    //     double y2 = x * sin + y * cos;
-    //     return new Vector3(x2, y2, z);
-    // }
 }

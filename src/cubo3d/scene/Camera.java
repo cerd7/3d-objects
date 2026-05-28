@@ -1,21 +1,23 @@
 package cubo3d.scene;
 
-import cubo3d.math.Vector2;
-import cubo3d.math.Vector3;
-
 public class Camera {
-    private final double distance;
+    private final double focalLength;
+    private final double nearZ;
 
-    public Camera(double distance){
-        this.distance = distance;
+    public Camera(double focalLength){
+        this.focalLength = focalLength;
+        this.nearZ = -focalLength + 1.0;
     }
 
-    public Vector2 project(Vector3 v){
-        double scale = distance / (distance + v.z);
-        return new Vector2(v.x * scale, v.y * scale);
+    public double focalLength(){
+        return focalLength;
     }
 
-    public double getDistance(){
-        return distance;
+    public double nearZ(){
+        return nearZ;
+    }
+
+    public double scale(double z){
+        return focalLength / (focalLength + z);
     }
 }

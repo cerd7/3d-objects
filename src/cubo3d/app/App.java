@@ -1,31 +1,38 @@
 package cubo3d.app;
 
 import javax.swing.JFrame;
+import javax.swing.SwingUtilities;
+
 import cubo3d.model.Cube;
-import cubo3d.scene.Scene;
-import cubo3d.scene.Entity;
-import cubo3d.scene.Transform;
+import cubo3d.model.Mesh;
 import cubo3d.scene.Camera;
+import cubo3d.scene.Entity;
+import cubo3d.scene.Scene;
+import cubo3d.scene.Transform;
 import cubo3d.ui.RenderPanel;
-import cubo3d.ui.Renderer;
 import cubo3d.ui.SolidRenderer;
 
-public class App{
-    public static void main(String[] args) throws Exception {
-        JFrame janela = new JFrame("Cubo 3D");
+public final class App {
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(App::start);
+    }
 
+    private static void start() {
         Scene scene = new Scene();
-        Renderer renderer = new SolidRenderer();
-        Camera camera =  new Camera(400);
-        RenderPanel panel = new RenderPanel(scene, renderer, camera);
-        
-        scene.add(new Entity(Cube.create(200), new Transform()));
-        
-        janela.add(panel);
-        janela.setSize(800, 600);
-        janela.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        janela.setVisible(true);
+        Mesh cube = Cube.create(160.0);
 
-        javax.swing.SwingUtilities.invokeLater(panel::requestFocusInWindow);
+        scene.add(new Entity(cube, new Transform().setPosition(-120.0, 0.0, 0.0)));
+        scene.add(new Entity(cube, new Transform().setPosition(120.0, 0.0, 80.0).setScale(0.7, 0.7, 0.7)));
+
+        RenderPanel panel = new RenderPanel(scene, new SolidRenderer(), new Camera(400.0));
+
+        JFrame frame = new JFrame("Cubo 3D");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(800, 600);
+        frame.add(panel);
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+
+        panel.requestFocusInWindow();
     }
 }

@@ -2,170 +2,258 @@ package cubo3d.ui;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.util.List;
 
-import cubo3d.math.Vector3;
+import cubo3d.math.Matrix4;
 import cubo3d.model.Mesh;
 import cubo3d.scene.Camera;
 import cubo3d.scene.Entity;
 import cubo3d.scene.EntityBuffers;
 import cubo3d.scene.Scene;
-import cubo3d.scene.Transform;
 
-public final class SolidRenderer implements Renderer{
-    private final Vector3 tmpA = new Vector3();
-    private final Vector3 tmpB = new Vector3();
-    private final Vector3 normal = new Vector3();
-    private final Vector3 lightDir = new Vector3(0.2, -1.0, -0.3).normalize();
-    private final Vector3 viewDir = new Vector3(0, 0, 1);
+public final class SolidRenderer implements Renderer {
+    private static final double EPSILON = 1e-9;
+    private static final double LIGHT_X = 0.18814417367671946;
+    private static final double LIGHT_Y = -0.9407208683835973;
+    private static final double LIGHT_Z = -0.28221626051507914;
 
-    private Vector3[] clipA = new Vector3[0];
-    private Vector3[] clipB = new Vector3[0];
-    private Vector3[] clipPool = new Vector3[0];
-    private int clipPoolIndex = 0;
+    private Entity[] queueEntity = new Entity[32];
+    private int[] queueFace = new int[32];
+    private int[] queueShade = new int[32];
+    private double[] queueDepth = new double[32];
+    private int queueSize;
 
-    private int[] xBuf = new int[0];
-    private int[] yBuf = new int[0];
+    private double[] clipAx = new double[8];
+    private double[] clipAy = new double[8];
+    private double[] clipAz = new double[8];
+    private double[] clipBx = new double[8];
+    private double[] clipBy = new double[8];
+    private double[] clipBz = new double[8];
 
-    @Override public void render(Graphics2D g, Scene scene, Camera camera, int cx, int cy){
-        for(Entity e : scene.getEntities()){
-            Mesh mesh = e.getMesh();
-            Transform t = e.getTransform();
+    private int[] xPoints = new int[8];
+    private int[] yPoints = new int[8];
 
-            ensureBuffers(mesh);
-            ensureClipBuffers(mesh);
+    @Override
+    public void render(Graphics2D g, Scene scene, Camera camera, int cx, int cy) {
+        List<Entity> entities = scene.entities();
 
-            EntityBuffers b = e.getBuffer();
-            for(int i=0;i<mesh.vertices.length;i++){
-                t.apply(mesh.vertices[i], b.world[i]);
-            }
+        int faceCapacity = 0;
+        int polygonCapacity = 0;
+        for (Entity entity : entities) {
+            faceCapacity += entity.mesh().faceCount();
+            polygonCapacity = Math.max(polygonCapacity, entity.mesh().maxFaceSize() + 2);
+        }
 
-            double dist = camera.getDistance();
-            double zNear = -dist + 1.0; 
+        ensureFaceQueue(faceCapacity);
+        ensurePolygonBuffers(polygonCapacity);
+        queueSize = 0;
 
-            for(int f=0;f<mesh.faces.length;f++){
-                int[] face = mesh.faces[f];
-                double z = 0;
-                for(int idx : face) z += b.world[idx].z;
-                b.faceDepth[f] = z / face.length;
-                b.faceOrder[f] = f;
-            }
-            sortFacesByDepth(b.faceOrder, b.faceDepth);
+        for (Entity entity : entities) {
+            transformVertices(entity);
+            enqueueVisibleFaces(entity);
+        }
 
-            for(int k=0;k< b.faceOrder.length;k++){
-                int f = b.faceOrder[k];
-                int[] face = mesh.faces[f];
+        if (queueSize > 1) quickSortFaces(0, queueSize - 1);
 
-                Vector3 v0 = b.world[face[0]]; 
-                Vector3 v1 = b.world[face[1]];
-                Vector3 v2 = b.world[face[2]];
-
-                tmpA.sub(v1, v0);
-                tmpB.sub(v2, v0);
-                normal.cross(tmpA, tmpB).normalize();
-
-                if (normal.dot(viewDir) >= 0) {
-                    continue;
-                }
-
-                double intensity = Math.max(0.0, normal.dot(lightDir));
-                int level = (int) Math.round(intensity * (Mesh.SHADE_LEVELS - 1));
-                if(level < 0) level = 0;
-                if(level >= Mesh.SHADE_LEVELS) level = Mesh.SHADE_LEVELS - 1;
-
-                for(int i=0;i<face.length;i++){
-                    clipA[i] = b.world[face[i]];
-                }
-
-                int clipped = clipPolygon(clipA, face.length, clipB, zNear);
-                if(clipped < 3) continue;
-
-                for(int i=0;i<clipped;i++){
-                    Vector3 v = clipB[i];
-                    double scale = dist / (dist + v.z);
-                    xBuf[i] = (int) (cx + v.x * scale);
-                    yBuf[i] = (int) (cy + v.y * scale);
-                }
-
-                int colorIndex = mesh.faceColorIndex[f];
-                g.setColor(mesh.shadeLut[colorIndex][level]);
-                g.fillPolygon(xBuf, yBuf, clipped);
-                g.setColor(Color.BLACK);
-                g.drawPolygon(xBuf, yBuf, clipped);
-            }
+        for (int i = 0; i < queueSize; i++) {
+            drawFace(g, queueEntity[i], queueFace[i], queueShade[i], camera, cx, cy);
         }
     }
 
-    private void ensureBuffers(Mesh mesh){
-        int needed = mesh.maxFaceSize + 2;
-        if(xBuf.length < needed){
-            xBuf = new int[needed];
-            yBuf = new int[needed];
+    private void transformVertices(Entity entity) {
+        Mesh mesh = entity.mesh();
+        EntityBuffers b = entity.buffers();
+        Matrix4 matrix = entity.transform().matrix();
+
+        double[] v = mesh.vertices();
+        double[] m = matrix.raw();
+
+        for (int i = 0, j = 0; i < mesh.vertexCount(); i++, j += 3) {
+            double x = v[j];
+            double y = v[j + 1];
+            double z = v[j + 2];
+
+            b.worldX[i] = m[0] * x + m[1] * y + m[2] * z + m[3];
+            b.worldY[i] = m[4] * x + m[5] * y + m[6] * z + m[7];
+            b.worldZ[i] = m[8] * x + m[9] * y + m[10] * z + m[11];
         }
     }
 
-    private void ensureClipBuffers(Mesh mesh){
-        int needed = mesh.maxFaceSize + 2;
-        if(clipA.length < needed){
-            clipA = new Vector3[needed];
-            clipB = new Vector3[needed];
-            clipPool = new Vector3[needed];
-            for(int i=0;i<needed;i++){
-                clipPool[i] = new Vector3();
+    private void enqueueVisibleFaces(Entity entity) {
+        Mesh mesh = entity.mesh();
+        EntityBuffers b = entity.buffers();
+
+        for (int f = 0; f < mesh.faceCount(); f++) {
+            int[] face = mesh.face(f);
+            if (face.length < 3) continue;
+
+            int i0 = face[0];
+            int i1 = face[1];
+            int i2 = face[2];
+
+            double ax = b.worldX[i1] - b.worldX[i0];
+            double ay = b.worldY[i1] - b.worldY[i0];
+            double az = b.worldZ[i1] - b.worldZ[i0];
+
+            double bx = b.worldX[i2] - b.worldX[i0];
+            double by = b.worldY[i2] - b.worldY[i0];
+            double bz = b.worldZ[i2] - b.worldZ[i0];
+
+            double nx = ay * bz - az * by;
+            double ny = az * bx - ax * bz;
+            double nz = ax * by - ay * bx;
+
+            double len2 = nx * nx + ny * ny + nz * nz;
+            if (len2 < EPSILON || nz >= 0.0) continue;
+
+            double invLen = 1.0 / Math.sqrt(len2);
+            nx *= invLen;
+            ny *= invLen;
+            nz *= invLen;
+
+            double intensity = Math.max(0.0, nx * LIGHT_X + ny * LIGHT_Y + nz * LIGHT_Z);
+            int shade = (int) Math.round(intensity * (Mesh.SHADE_LEVELS - 1));
+            if (shade < 0) shade = 0;
+            if (shade >= Mesh.SHADE_LEVELS) shade = Mesh.SHADE_LEVELS - 1;
+
+            double depth = 0.0;
+            for (int index : face) depth += b.worldZ[index];
+            depth /= face.length;
+
+            queueEntity[queueSize] = entity;
+            queueFace[queueSize] = f;
+            queueShade[queueSize] = shade;
+            queueDepth[queueSize] = depth;
+            queueSize++;
+        }
+    }
+
+    private void drawFace(Graphics2D g, Entity entity, int faceIndex, int shade, Camera camera, int cx, int cy) {
+        Mesh mesh = entity.mesh();
+        EntityBuffers b = entity.buffers();
+        int[] face = mesh.face(faceIndex);
+
+        for (int i = 0; i < face.length; i++) {
+            int index = face[i];
+            clipAx[i] = b.worldX[index];
+            clipAy[i] = b.worldY[index];
+            clipAz[i] = b.worldZ[index];
+        }
+
+        int clipped = clipNear(face.length, camera.nearZ());
+        if (clipped < 3) return;
+
+        for (int i = 0; i < clipped; i++) {
+            double scale = camera.scale(clipBz[i]);
+            xPoints[i] = (int) Math.round(cx + clipBx[i] * scale);
+            yPoints[i] = (int) Math.round(cy + clipBy[i] * scale);
+        }
+
+        g.setColor(mesh.shade(mesh.colorIndex(faceIndex), shade));
+        g.fillPolygon(xPoints, yPoints, clipped);
+        g.setColor(Color.BLACK);
+        g.drawPolygon(xPoints, yPoints, clipped);
+    }
+
+    private int clipNear(int count, double nearZ) {
+        int out = 0;
+
+        double sx = clipAx[count - 1];
+        double sy = clipAy[count - 1];
+        double sz = clipAz[count - 1];
+        boolean sInside = sz > nearZ;
+
+        for (int i = 0; i < count; i++) {
+            double ex = clipAx[i];
+            double ey = clipAy[i];
+            double ez = clipAz[i];
+            boolean eInside = ez > nearZ;
+
+            if (eInside) {
+                if (!sInside) {
+                    double t = (nearZ - sz) / (ez - sz);
+                    clipBx[out] = sx + (ex - sx) * t;
+                    clipBy[out] = sy + (ey - sy) * t;
+                    clipBz[out++] = nearZ;
+                }
+
+                clipBx[out] = ex;
+                clipBy[out] = ey;
+                clipBz[out++] = ez;
+            } else if (sInside) {
+                double t = (nearZ - sz) / (ez - sz);
+                clipBx[out] = sx + (ex - sx) * t;
+                clipBy[out] = sy + (ey - sy) * t;
+                clipBz[out++] = nearZ;
             }
+
+            sx = ex;
+            sy = ey;
+            sz = ez;
+            sInside = eInside;
         }
-    }
 
-    private static boolean inside(Vector3 v, double zNear){
-        return v.z > zNear;
-    }
-
-    private Vector3 intersectZPlane(Vector3 a, Vector3 b, double zNear, Vector3 out){
-        double t = (zNear - a.z) / (b.z - a.z);
-        out.x = a.x + (b.x - a.x) * t;
-        out.y = a.y + (b.y - a.y) * t;
-        out.z = zNear;
         return out;
     }
 
-    private int clipPolygon(Vector3[] in, int inCount, Vector3[] out, double zNear){
-        if(inCount == 0) return 0;
+    private void ensureFaceQueue(int capacity) {
+        if (queueEntity.length >= capacity) return;
 
-        clipPoolIndex = 0;
-        Vector3 S = in[inCount - 1];
-        boolean S_in = inside(S, zNear);
-        int outCount = 0;
-
-        for(int i=0;i<inCount;i++){
-            Vector3 E = in[i];
-            boolean E_in = inside(E, zNear);
-
-            if(E_in){
-                if(!S_in){
-                    Vector3 p = clipPool[clipPoolIndex++];
-                    out[outCount++] = intersectZPlane(S, E, zNear, p);
-                }
-                out[outCount++] = E;
-            } else if(S_in){
-                Vector3 p = clipPool[clipPoolIndex++];
-                out[outCount++] = intersectZPlane(S, E, zNear, p);
-            }
-            S = E;
-            S_in = E_in;
-        }
-        return outCount;
+        int next = Math.max(capacity, queueEntity.length * 2);
+        queueEntity = new Entity[next];
+        queueFace = new int[next];
+        queueShade = new int[next];
+        queueDepth = new double[next];
     }
 
-    private void sortFacesByDepth(int[] order, double[] depth){
-        for(int i=1;i<order.length;i++){
-            int key = order[i];
-            double keyDepth = depth[key];
-            int j = i - 1;
-            while (j >= 0 && depth[order[j]] < keyDepth) {
-                order[j + 1] = order[j];
+    private void ensurePolygonBuffers(int capacity) {
+        if (clipAx.length >= capacity) return;
+
+        clipAx = new double[capacity];
+        clipAy = new double[capacity];
+        clipAz = new double[capacity];
+        clipBx = new double[capacity];
+        clipBy = new double[capacity];
+        clipBz = new double[capacity];
+        xPoints = new int[capacity];
+        yPoints = new int[capacity];
+    }
+
+    private void quickSortFaces(int low, int high) {
+        int i = low;
+        int j = high;
+        double pivot = queueDepth[(low + high) >>> 1];
+
+        while (i <= j) {
+            while (queueDepth[i] > pivot) i++;
+            while (queueDepth[j] < pivot) j--;
+
+            if (i <= j) {
+                swap(i, j);
+                i++;
                 j--;
             }
-            order[j + 1] = key;
         }
+
+        if (low < j) quickSortFaces(low, j);
+        if (i < high) quickSortFaces(i, high);
     }
 
+    private void swap(int a, int b) {
+        Entity e = queueEntity[a];
+        queueEntity[a] = queueEntity[b];
+        queueEntity[b] = e;
+
+        int face = queueFace[a];
+        queueFace[a] = queueFace[b];
+        queueFace[b] = face;
+
+        int shade = queueShade[a];
+        queueShade[a] = queueShade[b];
+        queueShade[b] = shade;
+
+        double depth = queueDepth[a];
+        queueDepth[a] = queueDepth[b];
+        queueDepth[b] = depth;
+    }
 }

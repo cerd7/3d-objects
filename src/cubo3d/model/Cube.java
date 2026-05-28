@@ -2,21 +2,21 @@ package cubo3d.model;
 
 import java.awt.Color;
 
-import cubo3d.math.Vector3;
-
 public class Cube {
-    public static Mesh create(double size){
-        double s = size / 2.0;
+    public Cube(){}
 
-        Vector3[] vertices = {
-            new Vector3(-s, -s, -s),
-            new Vector3( s, -s, -s),
-            new Vector3( s,  s, -s),
-            new Vector3(-s,  s, -s),
-            new Vector3(-s, -s,  s),
-            new Vector3( s, -s,  s),
-            new Vector3( s,  s,  s),
-            new Vector3(-s,  s,  s),
+    public static Mesh create(double size){
+        double s = size * 0.5;
+
+        double[] vertices = {
+            -s, -s, -s,
+             s, -s, -s,
+             s,  s, -s,
+            -s,  s, -s,
+            -s, -s,  s,
+             s, -s,  s,
+             s,  s,  s,
+            -s,  s,  s,
         };
 
         int[][] faces = {
@@ -28,11 +28,10 @@ public class Cube {
             {0,4,7,3}
         };
 
-        Color[] faceColors ={
+        Color[] palette ={
             Color.RED, Color.BLUE, Color.GREEN,
             Color.YELLOW, Color.CYAN, Color.MAGENTA
         };
-        int[] faceColorIndex = {0,1,2,3,4,5};
-        return new Mesh(vertices, faces, faceColors, faceColorIndex);
+        return new Mesh(vertices, faces, palette, new int[] {0,1,2,3,4,5});
     }
 }

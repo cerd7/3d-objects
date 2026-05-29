@@ -69,9 +69,10 @@ public final class RenderPanel extends JPanel {
         super.paintComponent(g);
 
         Graphics2D g2 = (Graphics2D) g;
-        g2.setColor(Color.BLACK);
+        g2.setColor(Color.WHITE);
         g2.fillRect(0, 0, getWidth(), getHeight());
 
+        camera.setViewport(getWidth(), getHeight());
         renderer.render(g2, scene, camera, getWidth() / 2, getHeight() / 2);
     }
 }

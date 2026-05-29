@@ -40,7 +40,7 @@ public class Matrix4 {
         m[4] = (2.0 * (xy + wz)) * sx; 
         m[5] = (1.0 - 2.0 * (xx + zz)) * sy;
         m[6] = (2.0 * (yz - wx)) * sz;
-        m[7] = tz;
+        m[7] = ty;
 
         m[8] = (2.0 * (xz - wy)) * sx;
         m[9] = (2.0 * (yz + wx)) * sy;
@@ -50,5 +50,38 @@ public class Matrix4 {
         m[12] = m[13] = m[14] = 0.0;
         m[15] = 1.0;
         return this;
+    }
+
+    public Matrix4 setPerspective(double fovYRadians, double aspect, double near, double far){
+        double f = 1.0 / Math.tan(fovYRadians * 0.5);
+
+        m[0] = f / aspect;
+        m[1] = 0.0;
+        m[2] = 0.0;
+        m[3] = 0.0;
+
+        m[4] = 0.0;
+        m[5] = f;
+        m[6] = 0.0;
+        m[7] = 0.0;
+
+        m[8] = 0.0;
+        m[9] = 0.0;
+        m[10] = far / (far - near);
+        m[11] = (-near * far) / (far - near);
+        
+        m[12] = 0.0;
+        m[13] = 0.0;
+        m[14] = 1.0;
+        m[15] = 0.0;
+
+        return this;
+    }
+
+    public void transform(double x, double y, double z, double w, double out[]){
+        out[0] = m[0] * x + m[1] * y + m[2] * z + m[3] * w;
+        out[1] = m[4] * x + m[5] * y + m[6] * z + m[7] * w;
+        out[2] = m[8] * x + m[9] * y + m[10] * z + m[11] * w;
+        out[3] = m[12] * x + m[13] * y + m[14] * z + m[15] * w;
     }
 }

@@ -22,6 +22,7 @@ public final class SolidRenderer implements Renderer {
     private int[] queueShade = new int[32];
     private double[] queueDepth = new double[32];
     private int queueSize;
+    private final double[] temp4 = new double[4];
 
     private double[] clipAx = new double[8];
     private double[] clipAy = new double[8];
@@ -36,6 +37,8 @@ public final class SolidRenderer implements Renderer {
     @Override
     public void render(Graphics2D g, Scene scene, Camera camera, int cx, int cy) {
         List<Entity> entities = scene.entities();
+        Matrix4 view = camera.viewMatrix();
+        Matrix4 projection = camera.projectionMatrix4();
 
         int faceCapacity = 0;
         int polygonCapacity = 0;
@@ -56,7 +59,7 @@ public final class SolidRenderer implements Renderer {
         if (queueSize > 1) quickSortFaces(0, queueSize - 1);
 
         for (int i = 0; i < queueSize; i++) {
-            drawFace(g, queueEntity[i], queueFace[i], queueShade[i], camera, cx, cy);
+            drawFace(g, queueEntity[i], queueFace[i], queueShade[i], camera, view, projection, cx, cy);
         }
     }
 
@@ -128,25 +131,34 @@ public final class SolidRenderer implements Renderer {
         }
     }
 
-    private void drawFace(Graphics2D g, Entity entity, int faceIndex, int shade, Camera camera, int cx, int cy) {
+    private void drawFace(Graphics2D g, Entity entity, int faceIndex, int shade, Camera camera, Matrix4 view, Matrix4 projection, int cx, int cy) {
         Mesh mesh = entity.mesh();
         EntityBuffers b = entity.buffers();
         int[] face = mesh.face(faceIndex);
 
-        for (int i = 0; i < face.length; i++) {
+        for(int i = 0; i < face.length;i++){
             int index = face[i];
-            clipAx[i] = b.worldX[index];
-            clipAy[i] = b.worldY[index];
-            clipAz[i] = b.worldZ[index];
+            view.transform(b.worldX[index], b.worldY[index], b.worldZ[index], 1.0, temp4);
+            clipAx[i] = temp4[0];
+            clipAy[i] = temp4[1];
+            clipAz[i] = temp4[2];
         }
 
-        int clipped = clipNear(face.length, camera.nearZ());
+        int clipped = clipNear(face.length, camera.near());
         if (clipped < 3) return;
 
         for (int i = 0; i < clipped; i++) {
-            double scale = camera.scale(clipBz[i]);
-            xPoints[i] = (int) Math.round(cx + clipBx[i] * scale);
-            yPoints[i] = (int) Math.round(cy + clipBy[i] * scale);
+            projection.transform(clipBx[i], clipBy[i], clipBz[i], 1.0, temp4);
+            
+            if(temp4[3] <= 0.0) return;
+
+            double invW = 1.0 / temp4[3];
+            double ndcX = temp4[0] * invW;
+            double ndcY = temp4[1] * invW;
+            double ndcZ = temp4[2] * invW;
+            
+            xPoints[i] = (int) Math.round(cx + ndcX * cx);
+            yPoints[i] = (int) Math.round(cy - ndcY * cy);
         }
 
         g.setColor(mesh.shade(mesh.colorIndex(faceIndex), shade));

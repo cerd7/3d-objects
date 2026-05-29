@@ -24,7 +24,7 @@ public final class App {
         scene.add(new Entity(cube, new Transform().setPosition(-120.0, 0.0, 0.0)));
         scene.add(new Entity(cube, new Transform().setPosition(120.0, 0.0, 80.0).setScale(0.7, 0.7, 0.7)));
 
-        RenderPanel panel = new RenderPanel(scene, new SolidRenderer(), new Camera(400.0));
+        RenderPanel panel = new RenderPanel(scene, new SolidRenderer(), new Camera(60.0, 0.1, 2000.0));
 
         JFrame frame = new JFrame("Cubo 3D");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
